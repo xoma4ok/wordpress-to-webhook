@@ -36,7 +36,7 @@ jobs:
           if [ "$BRANCH" = "main" ] && [ -n "$VERSION" ]; then
             MAJOR=$(echo "$VERSION" | cut -d. -f1)
             MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-            TAGS="$IMAGE:$VERSION $IMAGE:$MINOR $IMAGE:$MAJOR $IMAGE:latest"
+            TAGS="$IMAGE:$VERSION,$IMAGE:$MINOR,$IMAGE:$MAJOR,$IMAGE:latest"
           elif [ "$BRANCH" = "main" ]; then
             TAGS="$IMAGE:latest"
           else
@@ -44,7 +44,9 @@ jobs:
           fi
 
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "tag_args=$(echo $TAGS | sed 's/ / -t /g' | sed 's/^/-t /')" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to ghcr.io
         if: ${{ inputs.push }}
@@ -54,12 +56,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
-        run: docker build ${{ steps.tags.outputs.tag_args }} .
-
-      - name: Push image
-        if: ${{ inputs.push }}
-        run: |
-          for tag in ${{ steps.tags.outputs.tags }}; do
-            docker push "$tag"
-          done
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ inputs.push }}
+          tags: ${{ steps.tags.outputs.tags }}
