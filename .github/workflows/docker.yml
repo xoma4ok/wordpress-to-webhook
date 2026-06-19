@@ -1,0 +1,38 @@
+name: Docker Build & Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push image to ghcr.io after build?'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/wordpress-to-webhook
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build -t ${{ env.IMAGE }}:${{ github.ref_name }} .
+
+      - name: Push image
+        if: ${{ inputs.push }}
+        run: docker push ${{ env.IMAGE }}:${{ github.ref_name }}
