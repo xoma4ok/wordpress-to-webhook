@@ -7,3 +7,4 @@ state.txt
 *.tar
 TODO.txt
 config.ini
+test_main.py
