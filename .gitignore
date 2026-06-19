@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+state.txt
+*.log
+.env
+config.ini
+TODO.txt
+*.tar
