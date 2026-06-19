@@ -15,4 +15,13 @@ jobs:
 
       - run: pip install pytest requests
 
-      - run: pytest test_main.py -v
+      - run: pytest test_main.py -v --junit-xml=results.xml
+        if: always()
+
+      - name: Test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: pytest results
+          path: results.xml
+          reporter: java-junit
