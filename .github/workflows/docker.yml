@@ -1,0 +1,65 @@
+name: Docker Build & Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push image to ghcr.io after build?'
+        required: true
+        type: boolean
+        default: false
+      version:
+        description: 'Semver version for main branch (e.g. 0.1.2)'
+        required: false
+        default: ''
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/wordpress-to-webhook
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: tags
+        run: |
+          IMAGE="${{ env.IMAGE }}"
+          BRANCH="${{ github.ref_name }}"
+          VERSION="${{ inputs.version }}"
+
+          if [ "$BRANCH" = "main" ] && [ -n "$VERSION" ]; then
+            MAJOR=$(echo "$VERSION" | cut -d. -f1)
+            MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+            TAGS="$IMAGE:$VERSION $IMAGE:$MINOR $IMAGE:$MAJOR $IMAGE:latest"
+          elif [ "$BRANCH" = "main" ]; then
+            TAGS="$IMAGE:latest"
+          else
+            TAGS="$IMAGE:${BRANCH}-latest"
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "tag_args=$(echo $TAGS | sed 's/ / -t /g' | sed 's/^/-t /')" >> $GITHUB_OUTPUT
+
+      - name: Log in to ghcr.io
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build ${{ steps.tags.outputs.tag_args }} .
+
+      - name: Push image
+        if: ${{ inputs.push }}
+        run: |
+          for tag in ${{ steps.tags.outputs.tags }}; do
+            docker push "$tag"
+          done
