@@ -1,0 +1,27 @@
+name: Run Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - run: pip install pytest requests
+
+      - run: pytest test_main.py -v --junit-xml=results.xml
+        if: always()
+
+      - name: Test report
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: pytest results
+          path: results.xml
+          reporter: java-junit
