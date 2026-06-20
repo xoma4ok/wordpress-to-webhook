@@ -76,6 +76,32 @@ Each part is sent as a separate request with a `part_delay_seconds` pause betwee
 
 ---
 
+### [replacements]
+
+Optional section. Substring replacements applied to matched posts **after** filtering and **before** transliteration.
+
+Each key–value pair defines one replacement: the key is the substring to find, the value is what to replace it with. Keys are lowercased by `configparser` — write them in lowercase. Replacements are applied in the order they appear in the file.
+
+| Behaviour | Example |
+|---|---|
+| Abbreviate long words | `липецк = лпк` |
+| Expand abbreviations | `бпла = беспилотник` |
+| Transliterate individual terms | `москва = Moskva` |
+| Remove unwanted substrings | `[подробнее] =` |
+| Normalize spelling variants | `беспилотный летательный аппарат = бпла` |
+
+```ini
+[replacements]
+липецк = лпк
+бпла = UAV
+[подробнее] =
+```
+
+> Matching is case-sensitive and applies to any substring, not just whole words.
+> For example, `ри = XX` would turn `Привет` into `ПXXвет`.
+
+---
+
 ### [state]
 
 | Parameter    | Type   | Default     | Description |
@@ -97,12 +123,25 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Docker
+### Docker — local build
+
 ```bash
 docker build -t wordpress-to-webhook .
 docker run -v $(pwd)/state.txt:/app/state.txt \
            -v $(pwd)/config.ini:/app/config.ini \
            wordpress-to-webhook
 ```
+
+### Docker — pull from GitHub Container Registry
+
+Pre-built images are published to `ghcr.io/xoma4ok/wordpress-to-webhook`.
+
+```bash
+docker pull ghcr.io/xoma4ok/wordpress-to-webhook:latest
+docker run -v $(pwd)/state.txt:/app/state.txt \
+           -v $(pwd)/config.ini:/app/config.ini \
+           ghcr.io/xoma4ok/wordpress-to-webhook:latest
+```
+
 
 > Mount `config.ini` and `state.txt` from outside the container so the config can be changed without rebuilding the image and state is preserved across restarts.
