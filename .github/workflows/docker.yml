@@ -30,7 +30,7 @@ jobs:
         id: tags
         run: |
           IMAGE="${{ env.IMAGE }}"
-          BRANCH="${{ github.ref_name }}"
+          BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
           VERSION="${{ inputs.version }}"
 
           if [ "$BRANCH" = "main" ] && [ -n "$VERSION" ]; then
