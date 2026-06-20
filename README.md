@@ -80,25 +80,27 @@ Each part is sent as a separate request with a `part_delay_seconds` pause betwee
 
 Optional section. Substring replacements applied to matched posts **after** filtering and **before** transliteration.
 
-Each key–value pair defines one replacement: the key is the substring to find, the value is what to replace it with. Keys are lowercased by `configparser` — write them in lowercase. Replacements are applied in the order they appear in the file.
-
-| Behaviour | Example |
-|---|---|
-| Abbreviate long words | `липецк = лпк` |
-| Expand abbreviations | `бпла = беспилотник` |
-| Transliterate individual terms | `москва = Moskva` |
-| Remove unwanted substrings | `[подробнее] =` |
-| Normalize spelling variants | `беспилотный летательный аппарат = бпла` |
+| Parameter | Type   | Description |
+|-----------|--------|-------------|
+| `pairs`   | string | JSON object `{"find": "replace", ...}`. Matching is case-sensitive, applies to any substring. Replacements run in order. |
 
 ```ini
 [replacements]
-липецк = лпк
-бпла = UAV
-[подробнее] =
+# Single word abbreviation
+pairs = {"липецк": "лпк"}
+
+# Multi-word phrase (with spaces) normalized to abbreviation
+pairs = {"беспилотный летательный аппарат": "бпла"}
+
+# Remove unwanted substring (empty replacement)
+pairs = {"[подробнее]": ""}
+
+# Combined
+pairs = {"бпла": "UAV", "беспилотный летательный аппарат": "UAV", "липецк": "лпк", "[подробнее]": ""}
 ```
 
 > Matching is case-sensitive and applies to any substring, not just whole words.
-> For example, `ри = XX` would turn `Привет` into `ПXXвет`.
+> For example, `"ри": "XX"` would turn `Привет` into `ПXXвет`.
 
 ---
 

@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 import time
 import logging
 import requests
@@ -236,10 +237,19 @@ def main():
 
     log.info("Loaded %d filter pattern(s): %s", len(patterns), [p.pattern for p in patterns])
 
-    # Load replacements dict once at startup (optional section)
-    replacements = dict(cfg["replacements"]) if cfg.has_section("replacements") else {}
-    if replacements:
-        log.info("Loaded %d replacement(s)", len(replacements))
+        # Load replacements dict once at startup (optional section)
+    replacements = {}
+    if cfg.has_section("replacements"):
+        raw = cfg["replacements"].get("pairs", "").strip()
+        if raw:
+            try:
+                replacements = json.loads(raw)
+                if not isinstance(replacements, dict):
+                    raise ValueError("pairs must be a JSON object")
+            except (json.JSONDecodeError, ValueError) as e:
+                log.error("Invalid replacements.pairs: %s", e)
+                sys.exit(1)
+            log.info("Loaded %d replacement(s)", len(replacements))
 
     try:
         interval = int(cfg["source"].get("interval_seconds", 60))
