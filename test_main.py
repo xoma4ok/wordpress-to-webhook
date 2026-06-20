@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 import pytest
 import configparser
 from pathlib import Path
@@ -81,6 +82,42 @@ def test_split_text_cyrillic_no_word_cut():
     assert "".join(parts).replace(" ", "") == text.replace(" ", "")
 
 
+# --- apply_replacements ---
+
+def test_apply_replacements_basic():
+    assert main.apply_replacements("hello world", {"world": "earth"}) == "hello earth"
+
+def test_apply_replacements_multiple():
+    assert main.apply_replacements("foo bar", {"foo": "baz", "bar": "qux"}) == "baz qux"
+
+def test_apply_replacements_empty_dict():
+    assert main.apply_replacements("hello", {}) == "hello"
+
+def test_apply_replacements_with_spaces():
+    assert main.apply_replacements("foo bar baz", {"foo bar": "qux"}) == "qux baz"
+
+
+def test_process_applies_replacements_with_spaces(tmp_path):
+    state_file = str(tmp_path / "state.txt")
+    cfg = _make_cfg(tmp_path, state_file, replacements={"hello world": "hi"})
+    patterns = [re.compile(".*")]
+    mock_resp = MagicMock()
+    mock_resp.ok = True; mock_resp.status_code = 200
+    posts_resp = MagicMock()
+    posts_resp.json.return_value = [_post(1, "hello world foo")]
+    posts_resp.raise_for_status = MagicMock()
+    with patch("main.requests.get", return_value=posts_resp), \
+         patch("main.requests.post", return_value=mock_resp) as mock_post:
+        main.process(cfg, patterns, _load_replacements(cfg))
+    sent_message = mock_post.call_args[1]["json"]["message"]
+    assert "hi" in sent_message
+    assert "hello world" not in sent_message
+
+
+def test_apply_replacements_no_match():
+    assert main.apply_replacements("hello", {"xyz": "abc"}) == "hello"
+
+
 # --- matches_any ---
 
 def test_matches_any_hit():
@@ -148,17 +185,28 @@ def test_send_webhook_raises_on_error():
 # --- process (integration) ---
 
 def _make_cfg(tmp_path, state_file, webhook_url="http://wh/hook",
-              max_length=200, transliterate="false", patterns=".*"):
+              max_length=200, transliterate="false", patterns=".*", replacements=None):
     cfg = configparser.ConfigParser()
-    cfg.read_dict({
+    sections = {
         "source":  {"source_url": "http://src/posts", "interval_seconds": "60"},
         "filters": {"patterns": patterns},
         "webhook": {"webhook_url": webhook_url, "token": "", "channel": "#test",
                     "max_length": str(max_length), "part_delay_seconds": "0",
                     "transliterate": transliterate},
         "state":   {"state_file": state_file},
-    })
+    }
+    if replacements is not None:
+        sections["replacements"] = {"pairs": json.dumps(replacements)}
+    cfg.read_dict(sections)
     return cfg
+
+
+def _load_replacements(cfg):
+    """Helper matching main.py logic for loading replacements from cfg."""
+    if not cfg.has_section("replacements"):
+        return {}
+    raw = cfg["replacements"].get("pairs", "").strip()
+    return json.loads(raw) if raw else {}
 
 def _post(post_id, content, date="2026-01-01T10:00:00"):
     return {"id": post_id, "date": date,
@@ -234,6 +282,44 @@ def test_process_splits_long_message(tmp_path):
          patch("main.requests.post", return_value=mock_resp) as mock_post:
         main.process(cfg, patterns)
     assert mock_post.call_count > 1
+
+def test_process_applies_replacements(tmp_path):
+    state_file = str(tmp_path / "state.txt")
+    cfg = _make_cfg(tmp_path, state_file, replacements={"world": "earth"})
+    patterns = [re.compile(".*")]
+    mock_resp = MagicMock()
+    mock_resp.ok = True; mock_resp.status_code = 200
+    posts_resp = MagicMock()
+    posts_resp.json.return_value = [_post(1, "Hello world")]
+    posts_resp.raise_for_status = MagicMock()
+    with patch("main.requests.get", return_value=posts_resp), \
+                  patch("main.requests.post", return_value=mock_resp) as mock_post:
+        main.process(cfg, patterns, _load_replacements(cfg))
+    sent_message = mock_post.call_args[1]["json"]["message"]
+    assert "earth" in sent_message
+    assert "world" not in sent_message
+
+
+def test_process_replacements_before_translit(tmp_path):
+    """Replacements run before transliteration, so replaced Latin text is not re-transliterated."""
+    state_file = str(tmp_path / "state.txt")
+    # configparser lowercases keys, so use lowercase Cyrillic as the replacement key
+    cfg = _make_cfg(tmp_path, state_file, transliterate="true",
+                    replacements={"privet": "Hi"})
+    patterns = [re.compile(".*")]
+    mock_resp = MagicMock()
+    mock_resp.ok = True; mock_resp.status_code = 200
+    posts_resp = MagicMock()
+    # "privet" in content will be replaced to "Hi" before transliteration
+    posts_resp.json.return_value = [_post(1, "privet mir")]
+    posts_resp.raise_for_status = MagicMock()
+    with patch("main.requests.get", return_value=posts_resp), \
+                  patch("main.requests.post", return_value=mock_resp) as mock_post:
+        main.process(cfg, patterns, _load_replacements(cfg))
+    sent_message = mock_post.call_args[1]["json"]["message"]
+    assert "Hi" in sent_message
+    assert "privet" not in sent_message
+
 
 def test_process_fetch_error_no_state_change(tmp_path):
     state_file = str(tmp_path / "state.txt")

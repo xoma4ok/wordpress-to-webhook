@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 import time
 import logging
 import requests
@@ -102,6 +103,13 @@ def save_state(path: str, post_id: int):
         log.error("Failed to save state to %s: %s", path, e)
 
 
+def apply_replacements(text: str, replacements: dict) -> str:
+    """Replace substrings in text according to the replacements dict."""
+    for src, dst in replacements.items():
+        text = text.replace(src, dst)
+    return text
+
+
 def matches_any(text: str, patterns: list) -> bool:
     """Return True if text matches at least one compiled regexp pattern."""
     return any(p.search(text) for p in patterns)
@@ -134,7 +142,7 @@ def load_config(path: str = "config.ini") -> configparser.ConfigParser:
     return cfg
 
 
-def process(cfg: configparser.ConfigParser, patterns: list):
+def process(cfg: configparser.ConfigParser, patterns: list, replacements: dict = None):
     """Single poll cycle: fetch posts, filter, optionally transliterate, split and send."""
     try:
         url = cfg["source"]["source_url"]
@@ -181,6 +189,9 @@ def process(cfg: configparser.ConfigParser, patterns: list):
         if not matches_any(text, patterns):
             log.info("Post id=%d did not match filters (text: %.60s...)", post_id, text)
         else:
+            if replacements:
+                text = apply_replacements(text, replacements)
+                log.debug("Post id=%d replacements applied", post_id)
             if do_translit:
                 text = translit(text)
                 log.debug("Post id=%d transliterated", post_id)
@@ -226,6 +237,20 @@ def main():
 
     log.info("Loaded %d filter pattern(s): %s", len(patterns), [p.pattern for p in patterns])
 
+        # Load replacements dict once at startup (optional section)
+    replacements = {}
+    if cfg.has_section("replacements"):
+        raw = cfg["replacements"].get("pairs", "").strip()
+        if raw:
+            try:
+                replacements = json.loads(raw)
+                if not isinstance(replacements, dict):
+                    raise ValueError("pairs must be a JSON object")
+            except (json.JSONDecodeError, ValueError) as e:
+                log.error("Invalid replacements.pairs: %s", e)
+                sys.exit(1)
+            log.info("Loaded %d replacement(s)", len(replacements))
+
     try:
         interval = int(cfg["source"].get("interval_seconds", 60))
     except ValueError as e:
@@ -236,7 +261,7 @@ def main():
 
     try:
         while True:
-            process(cfg, patterns)
+            process(cfg, patterns, replacements)
             time.sleep(interval)
     except KeyboardInterrupt:
         log.info("Sidecar stopped")
