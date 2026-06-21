@@ -321,6 +321,23 @@ def test_process_replacements_before_translit(tmp_path):
     assert "privet" not in sent_message
 
 
+def test_process_date_trimmed_to_hhmm(tmp_path):
+    state_file = str(tmp_path / "state.txt")
+    cfg = _make_cfg(tmp_path, state_file)
+    patterns = [re.compile(".*")]
+    mock_resp = MagicMock()
+    mock_resp.ok = True; mock_resp.status_code = 200
+    posts_resp = MagicMock()
+    posts_resp.json.return_value = [_post(1, "text", date="2026-01-01T20:09:11")]
+    posts_resp.raise_for_status = MagicMock()
+    with patch("main.requests.get", return_value=posts_resp), \
+         patch("main.requests.post", return_value=mock_resp) as mock_post:
+        main.process(cfg, patterns)
+    sent_message = mock_post.call_args[1]["json"]["message"]
+    assert sent_message.startswith("20:09")
+    assert "20:09:11" not in sent_message
+
+
 def test_process_fetch_error_no_state_change(tmp_path):
     state_file = str(tmp_path / "state.txt")
     cfg = _make_cfg(tmp_path, state_file)

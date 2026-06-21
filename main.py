@@ -179,12 +179,12 @@ def process(cfg: configparser.ConfigParser, patterns: list, replacements: dict =
             log.debug("Skip post id=%d (already processed)", post_id)
             continue
 
-        # Extract plain text from content.rendered and prepend time from date field
+                # Extract plain text from content.rendered and prepend time from date field
         raw_html = post.get("content", {}).get("rendered", "")
         text = strip_html(raw_html)
         date_val = post.get("date", "")
         if "T" in date_val:
-            text = date_val.split("T")[1] + " - " + text
+            text = date_val.split("T")[1][:5] + " - " + text
 
         if not matches_any(text, patterns):
             log.info("Post id=%d did not match filters (text: %.60s...)", post_id, text)
